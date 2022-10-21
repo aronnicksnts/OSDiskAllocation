@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from itertools import cycle
 
 '''Memory Block structured as a nested list
 [[process name, memory size, remaining time unit]]
@@ -57,7 +58,7 @@ def storageCompaction(memoryBlock):
 
 
 def firstFit(processes: list, memorySize: int, sc: int, ch: int):
-    currTimeUnit = 0
+    currTimeUnit = 1
     memoryBlock = [['Free', memorySize, 0]]
     timeUnitTable = []
     #Order to do the jobs
@@ -102,12 +103,21 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
             i += 1
         
         #Process jobs, no new memory available for all jobs
-        noFinishedJob = True
-        while noFinishedJob:
-            for job in orderTable:
-                job[2] -= 1
-                if job[2] == 0:
-                    pass
+        jobTable = {}
+        for i,memory in enumerate(memoryBlock):
+            if memory[0] != 'Free':
+                jobTable[memory[0]] = i
+        cycleOrder = cycle(orderTable)
+        #EDIT
+        for job in cycleOrder:
+            currMemBlock = memoryBlock[jobTable[job]]
+            currMemBlock[2] -= 1
+            currTimeUnit += 1
+            timeUnitTable.append(job)
+            if currMemBlock[2] == 0:
+                orderTable.remove(job)
+                currMemBlock[0] = 'Free'
+
             #Check for coalesce and storage compaction
             if currTimeUnit % sc == 0:
                 newMemTU = storageCompaction(memoryBlock)
@@ -122,13 +132,16 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
                 for i in range(newMemTU['unitTime']):
                     timeUnitTable.append('CH')
             
+    tUT = np.array(timeUnitTable)
+    print(pd.DataFrame(tUT.reshape(-1,9)))
+            
                 
 # memory = [['J4', 350, 1], ['J5', 60, 3], ['Free', 90, 0], ['Free', 250, 0], ['J3', 200, 2], ['Free', 50, 0]]
 # print(coalesce(memory))
 
-memory = [['Free', 350, 0], ['J5', 60, 2], ['J6', 300, 1], ['Free', 40, 0], ['J3', 200, 1], ['Free', 50, 0]]
-memory = [['Free', 350, 0], ['J5', 60, 2], ['J6', 300, 1], ['J3', 200, 1]]
-print(storageCompaction(memory))
+# memory = [['Free', 350, 0], ['J5', 60, 2], ['J6', 300, 1], ['Free', 40, 0], ['J3', 200, 1], ['Free', 50, 0]]
+# memory = [['Free', 350, 0], ['J5', 60, 2], ['J6', 300, 1], ['J3', 200, 1]]
+# print(storageCompaction(memory))
 
 processes = [['J1', 500, 3], ['J2', 250, 4], ['J3', 200, 5], ['J4', 350, 3], 
             ['J5', 60, 5], ['J6', 300, 3], ['J7', 400, 2]]
