@@ -1,13 +1,20 @@
-import numpy as np
 import pandas as pd
-from itertools import cycle
+import numpy as np
+from IPython.display import clear_output
+import time
+from copy import deepcopy
 
 '''Memory Block structured as a nested list
 [[process name, memory size, remaining time unit]]
 Free or unused memory is named as "Free"
 Free memories have 0 time unit
 '''
-
+def clear():
+    clear_output(wait=False)
+def createTimeUnitTable(processes: list):
+    processes = np.asarray(processes)
+    df = pd.DataFrame(processes.reshape(-1,10))
+    print(df)
 #Combines Free memories adjacent to each other
 #Returns the memoryBlock and the total unitTime used
 def coalesce(memoryBlock):
@@ -68,11 +75,16 @@ def checkSCnCH(currTimeUnit: int, memoryBlock: list, timeUnitTable: list, sc, ch
             timeUnitTable.append('CH')
     return [currTimeUnit, memoryBlock, timeUnitTable]
 
-
 def removeExcess(timeUnitTable: list):
     while timeUnitTable[-1] in ['CH', 'SC']:
         timeUnitTable.pop(-1)
     return timeUnitTable
+
+def printMemoryBlock(memoryBlock, timeUnitTable):
+    clear()
+    print(pd.DataFrame(memoryBlock, columns = ["Memory Name", "Occupying Size", "Time Unit Left"]))
+    print(timeUnitTable)
+#     time.sleep(1)
 #Does the first fit algorithm
 #processes must be made as such
 #[process name, memory size, time unit]
@@ -82,6 +94,7 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
     timeUnitTable = []
     #Order to do the jobs
     orderTable = []
+    printMemoryBlock(memoryBlock, timeUnitTable)
     while processes or len(memoryBlock) != 1:
         i = 0
         currProcess = 0
@@ -98,6 +111,7 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
                         memoryBlock[i+1][1] -= process[1]
                         mbLen = len(memoryBlock)
                         currTimeUnit += 1
+                        printMemoryBlock(memoryBlock, timeUnitTable)
                         orderTable.append(process[0])
                         currTimeUnit, memoryBlock, timeUnitTable = checkSCnCH(currTimeUnit, memoryBlock,
                         timeUnitTable, sc, ch)
@@ -118,12 +132,12 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
         #Processes job whilst no new memory is created
         orderTableLen = len(orderTable)
         while orderTableLen == len(orderTable):
-            print(orderTable)
             currMemBlock = memoryBlock[jobTable[orderTable.pop(0)]]
             procName = currMemBlock[0]
             currMemBlock[2] -= 1
             currTimeUnit += 1
             timeUnitTable.append(procName)
+            printMemoryBlock(memoryBlock, timeUnitTable)
             if currMemBlock[2] == 0:
                 currMemBlock[0] = 'Free'
             else:
@@ -136,12 +150,48 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
 
             if lastTimeUnit != currTimeUnit:
                 break
+                
+    for i in range(len(memoryBlock)):
+        memoryBlock[i][0] = 'Free'
+    memoryBlock = coalesce(memoryBlock)['memory']
+    memoryBlock = storageCompaction(memoryBlock)['memory']
+    timeUnitTable = removeExcess(timeUnitTable)
+    printMemoryBlock(memoryBlock, timeUnitTable)
     
-    return removeExcess(timeUnitTable)
+    return timeUnitTable
 
 
+def user_input():
+    use_again = True
+    while use_again:
+        processSize = [] 
+        processTimeUnit = []
+        processes = []
+        blockSize = int(input("Enter Block Size: "))
+        processSize = list(map(int, input("Enter Process Size (Separate w/ spaces): ").strip().split()))
+        processTimeUnit = list(map(int, input("Enter Time Unit (Separate w/ spaces): ").strip().split()))
+        sc = int(input("What is the Storage Compaction?"))
+        ch = int(input("What is the Coalescing Hole?"))
 
-processes = [['J1', 500, 3], ['J2', 250, 4], ['J3', 200, 5], ['J4', 350, 3], 
-            ['J5', 60, 5], ['J6', 300, 3], ['J7', 400, 2]]
+        if len(processSize) != len(processTimeUnit):
+            clear()
+            print("Length of process size and process time unit are not equal. Please try again")
+        for i in range(len(processSize)):
+            processes.append([f"J{i+1}", processSize[i], processTimeUnit[i]])
+        HistTUT = []
+        HistTUT.append([firstFit(deepcopy(processes), blockSize, sc, ch), sc, ch])
+        useDiff = 1
+        while useDiff:
+            useDiff = int(input("Would you like to use the same memory and processes but with" \
+                                "different Storage Compaction and Coalescing Hole (1 for yes; 0 for no)?"))
+            if useDiff:
+                sc = int(input("What is the new Storage Compaction?"))
+                ch = int(input("What is the new Coalescing Hole?"))
+                HistTUT.append([firstFit(deepcopy(processes), blockSize, sc, ch), sc, ch])
 
-print(firstFit(processes, 1000, 20, 1))
+        use_again = int(input("Would you like to use it again (1 for yes; 0 for no)? "))
+    print("Have a nice day")
+                
+
+
+user_input()
