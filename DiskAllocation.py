@@ -52,18 +52,37 @@ def storageCompaction(memoryBlock):
     memoryBlock = np.array(df_mb).tolist()
     return {'memory': memoryBlock, 'unitTime': totalTimeUnit}
 
+#Check for coalesce and storage compaction
+def checkSCnCH(currTimeUnit: int, memoryBlock: list, timeUnitTable: list, sc, ch):
+    if currTimeUnit % sc == 0:
+        newMemTU = storageCompaction(memoryBlock)
+        memoryBlock = newMemTU['memory']
+        currTimeUnit += newMemTU['unitTime']
+        for i in range(newMemTU['unitTime']):
+            timeUnitTable.append('SC')
+    if currTimeUnit % ch == 0:
+        newMemTU = coalesce(memoryBlock)
+        memoryBlock = newMemTU['memory']
+        currTimeUnit += newMemTU['unitTime']
+        for i in range(newMemTU['unitTime']):
+            timeUnitTable.append('CH')
+    return [currTimeUnit, memoryBlock, timeUnitTable]
+
+
+def removeExcess(timeUnitTable: list):
+    while timeUnitTable[-1] in ['CH', 'SC']:
+        timeUnitTable.pop(-1)
+    return timeUnitTable
 #Does the first fit algorithm
 #processes must be made as such
 #[process name, memory size, time unit]
-
-
 def firstFit(processes: list, memorySize: int, sc: int, ch: int):
-    currTimeUnit = 1
+    currTimeUnit = 0
     memoryBlock = [['Free', memorySize, 0]]
     timeUnitTable = []
     #Order to do the jobs
     orderTable = []
-    while processes:
+    while processes or len(memoryBlock) != 1:
         i = 0
         currProcess = 0
         mbLen = len(memoryBlock)
@@ -80,20 +99,9 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
                         mbLen = len(memoryBlock)
                         currTimeUnit += 1
                         orderTable.append(process[0])
-
-                        if currTimeUnit % sc == 0:
-                            newMemTU = storageCompaction(memoryBlock)
-                            memoryBlock = newMemTU['memory']
-                            currTimeUnit += newMemTU['unitTime']
-                            for i in range(newMemTU['unitTime']):
-                                timeUnitTable.append('SC')
-                        if currTimeUnit % ch == 0:
-                            newMemTU = coalesce(memoryBlock)
-                            memoryBlock = newMemTU['memory']
-                            currTimeUnit += newMemTU['unitTime']
-                            for i in range(newMemTU['unitTime']):
-                                timeUnitTable.append('CH')
-
+                        currTimeUnit, memoryBlock, timeUnitTable = checkSCnCH(currTimeUnit, memoryBlock,
+                        timeUnitTable, sc, ch)
+                        
                         timeUnitTable.append(process[0])
                         memoryBlock[i][2] -= 1
                         i += 1
@@ -107,43 +115,33 @@ def firstFit(processes: list, memorySize: int, sc: int, ch: int):
         for i,memory in enumerate(memoryBlock):
             if memory[0] != 'Free':
                 jobTable[memory[0]] = i
-        cycleOrder = cycle(orderTable)
-        #EDIT
-        for job in cycleOrder:
-            currMemBlock = memoryBlock[jobTable[job]]
+        #Processes job whilst no new memory is created
+        orderTableLen = len(orderTable)
+        while orderTableLen == len(orderTable):
+            print(orderTable)
+            currMemBlock = memoryBlock[jobTable[orderTable.pop(0)]]
+            procName = currMemBlock[0]
             currMemBlock[2] -= 1
             currTimeUnit += 1
-            timeUnitTable.append(job)
+            timeUnitTable.append(procName)
             if currMemBlock[2] == 0:
-                orderTable.remove(job)
                 currMemBlock[0] = 'Free'
+            else:
+                orderTable.append(procName)
 
+            lastTimeUnit = currTimeUnit
             #Check for coalesce and storage compaction
-            if currTimeUnit % sc == 0:
-                newMemTU = storageCompaction(memoryBlock)
-                memoryBlock = newMemTU['memory']
-                currTimeUnit += newMemTU['unitTime']
-                for i in range(newMemTU['unitTime']):
-                    timeUnitTable.append('SC')
-            if currTimeUnit % ch == 0:
-                newMemTU = coalesce(memoryBlock)
-                memoryBlock = newMemTU['memory']
-                currTimeUnit += newMemTU['unitTime']
-                for i in range(newMemTU['unitTime']):
-                    timeUnitTable.append('CH')
-            
-    tUT = np.array(timeUnitTable)
-    print(pd.DataFrame(tUT.reshape(-1,9)))
-            
-                
-# memory = [['J4', 350, 1], ['J5', 60, 3], ['Free', 90, 0], ['Free', 250, 0], ['J3', 200, 2], ['Free', 50, 0]]
-# print(coalesce(memory))
+            currTimeUnit, memoryBlock, timeUnitTable = checkSCnCH(currTimeUnit, memoryBlock, 
+            timeUnitTable, sc, ch)
 
-# memory = [['Free', 350, 0], ['J5', 60, 2], ['J6', 300, 1], ['Free', 40, 0], ['J3', 200, 1], ['Free', 50, 0]]
-# memory = [['Free', 350, 0], ['J5', 60, 2], ['J6', 300, 1], ['J3', 200, 1]]
-# print(storageCompaction(memory))
+            if lastTimeUnit != currTimeUnit:
+                break
+    
+    return removeExcess(timeUnitTable)
+
+
 
 processes = [['J1', 500, 3], ['J2', 250, 4], ['J3', 200, 5], ['J4', 350, 3], 
             ['J5', 60, 5], ['J6', 300, 3], ['J7', 400, 2]]
 
-firstFit(processes, 1000, 20, 1)
+print(firstFit(processes, 1000, 20, 1))
